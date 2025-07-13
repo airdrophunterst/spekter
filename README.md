@@ -10,6 +10,7 @@ I am not `responsible` for the possibility of an account being `banned`!
 
 ## 📎 Node cli version Script features
 
+- Auto ref
 - Auto claim spark
 - Auto game full stage
 - Auto login, revalidate
