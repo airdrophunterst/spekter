@@ -302,6 +302,7 @@ class ClientAPI {
       if (newToken.success && newToken.data?.token) {
         const res = await this.verifyToken(newToken.data?.token);
         if (res.data.idToken) {
+          this.token = res.data.idToken;
           await saveJson(this.session_name, res.data.idToken, "tokens.json");
           return res.data.idToken;
         }
@@ -491,11 +492,18 @@ class ClientAPI {
       if (currentStage == settings.MAX_STAGE) {
         const stageAvaliable = Object.values(stages.infos).filter((s) => s.rewardState < 3);
         if (stageAvaliable.length == 0) {
-          this.log(`Max stage reached!`, "warning");
+          while (energy > 5) {
+            energy -= 5;
+            const res = await this.handleGame(settings.MAX_STAGE);
+            if (!res) break;
+            this.token = await this.getValidToken();
+          }
+        } else {
           for (const stage of stageAvaliable) {
             if (energy > 5) {
               energy -= 5;
               const res = await this.handleGame(stage.stageId);
+              this.token = await this.getValidToken();
               if (!res) break;
             } else {
               this.log(`Not enough energy!`, "warning");
@@ -507,6 +515,7 @@ class ClientAPI {
         if (energy > 5) {
           energy -= 5;
           const res = await this.handleGame(currentStage);
+          this.token = await this.getValidToken();
           currentStage++;
           if (!res) break;
         } else {
