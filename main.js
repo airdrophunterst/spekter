@@ -17,7 +17,7 @@ class ClientAPI {
       "Accept-Encoding": "gzip, deflate, br",
       "Accept-Language": "vi-VN,vi;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5",
       "Content-Type": "application/json",
-      Origin: "https://app.spekteragency.io",
+      origin: "https://app.spekteragency.io",
       referer: "https://app.spekteragency.io/",
       "Sec-Ch-Ua": '"Not/A)Brand";v="99", "Google Chrome";v="115", "Chromium";v="115"',
       "Sec-Ch-Ua-Mobile": "?0",
@@ -163,6 +163,7 @@ class ClientAPI {
 
     const headers = {
       ...this.headers,
+      host: "us-central1-spekter-agency.cloudfunctions.net",
       ...extraHeaders,
     };
 
@@ -184,6 +185,7 @@ class ClientAPI {
           data,
           headers,
           timeout: 30000,
+
           ...(proxyAgent ? { httpsAgent: proxyAgent } : {}),
         });
         success = true;
@@ -239,7 +241,7 @@ class ClientAPI {
   }
 
   async verifyToken(token) {
-    return this.makeRequest(
+    const res = await this.makeRequest(
       `https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyCustomToken?key=AIzaSyAvfTd0fcRoSBwPw22kcBM2JqvG7Y147DY`,
       "post",
       {
@@ -254,12 +256,34 @@ class ClientAPI {
         },
       }
     );
+    if (res?.data && res.data.idToken) {
+      await this.getAccinfo(res.data.idToken);
+    }
+
+    return res;
+  }
+
+  async getAccinfo(token) {
+    return this.makeRequest(
+      `https://www.googleapis.com/identitytoolkit/v3/relyingparty/getAccountInfo?key=AIzaSyAvfTd0fcRoSBwPw22kcBM2JqvG7Y147DY`,
+      "post",
+      {
+        idToken: token,
+      },
+      {
+        isAuth: true,
+        extraHeaders: {
+          host: "www.googleapis.com",
+          "x-client-version": "Chrome/JsCore/8.10.1/FirebaseCore-web",
+        },
+      }
+    );
   }
 
   async getUserInfo() {
     return this.makeRequest(`${this.baseURL}/getUserData`, "post", {
       data: {
-        inviter: settings.REF_ID || "",
+        inviter: settings.REF_ID || "Agent_179391",
       },
     });
   }
@@ -334,6 +358,19 @@ class ClientAPI {
     const hours24 = 24 * 60 * 60 * 1000;
 
     return timeDiff >= hours24;
+  }
+
+  getRemainingTimeForSparkCore(lastClaim) {
+    const currentTime = Date.now();
+    const timeDiff = currentTime - lastClaim;
+    const hours24 = 24 * 60 * 60 * 1000;
+    const remainingTime = hours24 - timeDiff;
+    if (remainingTime <= 0) {
+      return { hours: 0, minutes: 0 };
+    }
+    const remainingHours = Math.floor(remainingTime / (60 * 60 * 1000));
+    const remainingMinutes = Math.floor((remainingTime % (60 * 60 * 1000)) / (60 * 1000));
+    return { hours: remainingHours, minutes: remainingMinutes };
   }
 
   async handleGame(stageLevel, retries = 2) {
@@ -445,6 +482,7 @@ class ClientAPI {
     const queryData = JSON.parse(decodeURIComponent(initData.split("user=")[1].split("&")[0]));
     this.session_name = queryData.id;
     this.token = this.tokens[this.session_name];
+
     if (settings.USE_PROXY) {
       try {
         this.proxyIP = await this.checkProxyIP();
@@ -479,7 +517,6 @@ class ClientAPI {
         `Username: ${userInfo.name} | Lv stage: ${stages.stageLv} | Gold: ${currency.gold} | Diamond: ${currency.diamond} | Spark:${currency.sparks} | Energy: ${currency.energyInfo.energy}`,
         "custom"
       );
-
       if (!lastClaim || this.canClaimSparkCore(lastClaim)) {
         const harvestResult = await this.claimSpark();
         if (harvestResult.success) {
@@ -487,6 +524,9 @@ class ClientAPI {
         } else {
           this.log(`Claim spart score failed! | ${JSON.stringify(harvestResult)}`, "warning");
         }
+      } else {
+        const { hours, minutes } = this.getRemainingTimeForSparkCore(lastClaim);
+        this.log(`Next claim sparkcore at: ${hours} hours ${minutes} minutes`, "warning");
       }
       await sleep(1);
       if (currentStage == settings.MAX_STAGE) {
