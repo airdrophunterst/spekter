@@ -380,11 +380,13 @@ class ClientAPI {
       const res = await this.startStage(String(stageLevel));
       if (!res.success) {
         this.log(`Can't start stage ${stageLevel} | ${JSON.stringify(res)}`, "warning");
+        if (settings.AUTO_LOOP) return false;
         continue;
       }
       const { stageUid, stageId, lootItemInfo, userState } = res.data;
       if (!stageUid || !lootItemInfo) {
         this.log(`Can't start stage`, "warning");
+        if (settings.AUTO_LOOP) return false;
         continue;
       }
 
@@ -471,7 +473,7 @@ class ClientAPI {
       }
     }
 
-    return settings.AUTO_LOOP;
+    return settings.AUTO_LOOP ?? false;
   }
 
   convertMilliseconds(ms) {
