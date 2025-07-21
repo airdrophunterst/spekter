@@ -8,6 +8,7 @@ const settings = {
   MAX_THEADS_NO_PROXY: process.env.MAX_THEADS_NO_PROXY ? parseInt(process.env.MAX_THEADS_NO_PROXY) : 10,
   MAX_STAGE: process.env.MAX_AMOUNT_GACHA ? parseInt(process.env.MAX_AMOUNT_GACHA) : 100,
   MAX_STAGE: process.env.MAX_STAGE ? parseInt(process.env.MAX_STAGE) : 51,
+  LOOP_STAGE: process.env.LOOP_STAGE ? parseInt(process.env.LOOP_STAGE) : 51,
 
   START_MAP_CHALLENGE_INDEX: process.env.START_MAP_CHALLENGE_INDEX ? parseInt(process.env.START_MAP_CHALLENGE_INDEX) : 1,
 
@@ -18,7 +19,7 @@ const settings = {
 
   AUTO_TASK: process.env.AUTO_TASK ? process.env.AUTO_TASK.toLowerCase() === "true" : false,
   AUTO_CHALLENGE: process.env.AUTO_CHALLENGE ? process.env.AUTO_CHALLENGE.toLowerCase() === "true" : false,
-  AUTO_CHALLENGE_CLAN: process.env.AUTO_CHALLENGE_CLAN ? process.env.AUTO_CHALLENGE_CLAN.toLowerCase() === "true" : false,
+  AUTO_LOOP: process.env.AUTO_LOOP ? process.env.AUTO_LOOP.toLowerCase() === "true" : false,
 
   ENABLE_MAP_INDEX_CHALLENGE: process.env.ENABLE_MAP_INDEX_CHALLENGE ? process.env.ENABLE_MAP_INDEX_CHALLENGE.toLowerCase() === "true" : false,
 
@@ -37,7 +38,7 @@ const settings = {
 
   API_ID: process.env.API_ID ? process.env.API_ID : null,
   BASE_URL: process.env.BASE_URL ? process.env.BASE_URL : "https://tgapi.sleepagotchi.com/v1/tg",
-  REF_ID: process.env.REF_ID ? process.env.REF_ID : "T_1092680235",
+  REF_ID: process.env.REF_ID ? process.env.REF_ID : "",
 
   DELAY_BETWEEN_REQUESTS: process.env.DELAY_BETWEEN_REQUESTS && _isArray(process.env.DELAY_BETWEEN_REQUESTS) ? JSON.parse(process.env.DELAY_BETWEEN_REQUESTS) : [1, 5],
   DELAY_START_BOT: process.env.DELAY_START_BOT && _isArray(process.env.DELAY_START_BOT) ? JSON.parse(process.env.DELAY_START_BOT) : [1, 15],

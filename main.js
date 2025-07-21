@@ -459,15 +459,19 @@ class ClientAPI {
         played = true;
       }
 
-      const resClaim = await this.claimStageReward(stageLevel);
-      if (resClaim.success) {
-        this.log(`Claim stage ${stageLevel} success`, "success");
-        return true;
-      } else {
-        this.log(`Claim stage ${stageLevel} failed | Reward: ${JSON.stringify(resClaim)}`, "warning");
+      if (!settings.AUTO_LOOP) {
+        const resClaim = await this.claimStageReward(stageLevel);
+        if (resClaim.success) {
+          this.log(`Claim stage ${stageLevel} success`, "success");
+          return true;
+        } else {
+          this.log(`Claim stage ${stageLevel} failed | Reward: ${JSON.stringify(resClaim)}`, "warning");
+          return true;
+        }
       }
     }
-    return false;
+
+    return settings.AUTO_LOOP;
   }
 
   convertMilliseconds(ms) {
@@ -529,7 +533,19 @@ class ClientAPI {
         this.log(`Next claim sparkcore at: ${hours} hours ${minutes} minutes`, "warning");
       }
       await sleep(1);
-      if (currentStage == settings.MAX_STAGE) {
+
+      if (settings.AUTO_LOOP && currentStage >= settings.LOOP_STAGE) {
+        this.log(`You are looping stage ${settings.LOOP_STAGE}...`);
+        while (energy > 5) {
+          energy -= 5;
+          const res = await this.handleGame(settings.LOOP_STAGE);
+          if (!res) break;
+          this.token = await this.getValidToken();
+        }
+      }
+
+      if (currentStage >= settings.MAX_STAGE) {
+        //ktra các stage chưa claim
         const stageAvaliable = Object.values(stages.infos).filter((s) => s.rewardState < 3);
         if (stageAvaliable.length == 0) {
           while (energy > 5) {
@@ -645,7 +661,6 @@ async function main() {
               resolve();
             });
             worker.on("exit", (code) => {
-              worker.terminate();
               if (code !== 0) {
                 errors.push(`Worker cho tài khoản ${currentIndex} thoát với mã: ${code}`);
               }
