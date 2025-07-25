@@ -9,10 +9,12 @@ const settings = require("./config/config");
 const { sleep, loadData, getRandomNumber, saveToken, isTokenExpired, saveJson } = require("./utils");
 const { Worker, isMainThread, parentPort, workerData } = require("worker_threads");
 const { checkBaseUrl } = require("./checkAPI");
+const GameSv = require("./services/game");
+const SparkSv = require("./services/sparklink");
 
 class ClientAPI {
   constructor(queryId, accountIndex, proxy, baseURL, tokens) {
-    this.headers = {
+    this.headers = new Headers({
       Accept: "*/*",
       "Accept-Encoding": "gzip, deflate, br",
       "Accept-Language": "vi-VN,vi;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5",
@@ -26,7 +28,7 @@ class ClientAPI {
       "Sec-Fetch-Mode": "cors",
       "Sec-Fetch-Site": "same-origin",
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-    };
+    });
     this.baseURL = baseURL;
     this.queryId = queryId;
     this.accountIndex = accountIndex;
@@ -159,11 +161,17 @@ class ClientAPI {
       extraHeaders: {},
     }
   ) {
-    const { retries, isAuth, extraHeaders } = options;
+    const initOptions = {
+      retries: 2,
+      isAuth: false,
+      extraHeaders: {},
+      ...options,
+    };
+    const { retries, isAuth, extraHeaders } = initOptions;
 
     const headers = {
       ...this.headers,
-      host: "us-central1-spekter-agency.cloudfunctions.net",
+      host: "api.app.spekteragency.io",
       ...extraHeaders,
     };
 
@@ -186,25 +194,22 @@ class ClientAPI {
           headers,
           timeout: 30000,
 
-          ...(proxyAgent ? { httpsAgent: proxyAgent } : {}),
+          ...(proxyAgent ? { httpsAgent: proxyAgent, httpAgent: proxyAgent } : {}),
         });
         success = true;
-        if (response?.data?.result) {
-          if (response?.data?.result?.errorCode) {
-            if (response?.data?.result?.errorCode !== 0) return { status: response.status, success: false, data: response.data.result };
-            return { status: response.status, success: true, data: response.data.result.data.data };
+        if (response?.data) {
+          if (response?.data?.errorCode) {
+            if (response?.data?.errorCode !== 0) return { status: response.status, success: false, data: response.data };
+            return { status: response.status, success: true, data: response.data.data };
           }
-          return { status: response.status, success: true, data: response.data.result.data || response.data.result };
+          return { status: response.status, success: true, data: response.data?.data || response.data };
         }
         return { success: true, data: response.data, status: response.status };
       } catch (error) {
-        if (error.message.includes("stream has been aborted")) {
-          return { success: false, status: error.status, data: null, error: error.response.data.error || error.response.data.message || error.message };
-        }
         if (error.status == 401) {
           const token = await this.getValidToken(true);
           if (!token) {
-            process.exit(1);
+            process.exit(0);
           }
           this.token = token;
           if (retries > 0)
@@ -215,10 +220,8 @@ class ClientAPI {
           else return { success: false, status: error.status, error: error.response.data.error || error.response.data.message || error.message };
         }
         if (error.status == 400) {
-          this.log(`Invalid request for ${url}, maybe have new update from server | contact: https://t.me/airdrophuntersieutoc to get new update!`, "error");
           return { success: false, status: error.status, error: error.response.data.error || error.response.data.message || error.message };
         }
-        this.log(`Yêu cầu thất bại: ${url} | ${error.message} | đang thử lại...`, "warning");
         success = false;
         await sleep(settings.DELAY_BETWEEN_REQUESTS);
         if (currRetries == retries) return { status: error.status, success: false, error: error.message };
@@ -232,9 +235,7 @@ class ClientAPI {
       `${this.baseURL}/telegramAuth`,
       "post",
       {
-        data: {
-          initData: this.queryId,
-        },
+        initData: this.queryId,
       },
       { isAuth: true }
     );
@@ -258,6 +259,10 @@ class ClientAPI {
     );
     if (res?.data && res.data.idToken) {
       await this.getAccinfo(res.data.idToken);
+    } else {
+      this.log(`Verify token failed: ${JSON.stringify(res).includes("USER_DISABLED") ? "User has been banned" : JSON.stringify(res)}`, "error");
+      await sleep(1);
+      process.exit(0);
     }
 
     return res;
@@ -282,17 +287,13 @@ class ClientAPI {
 
   async getUserInfo() {
     return this.makeRequest(`${this.baseURL}/getUserData`, "post", {
-      data: {
-        inviter: settings.REF_ID || "Agent_179391",
-      },
+      inviter: settings.REF_ID || "Agent_179391",
     });
   }
 
   async claimStageReward(stageId) {
     return this.makeRequest(`${this.baseURL}/claimStageReward`, "post", {
-      data: {
-        stageId: stageId,
-      },
+      stageId: stageId,
     });
   }
 
@@ -300,18 +301,6 @@ class ClientAPI {
     return this.makeRequest(`${this.baseURL}/harvestSparkCore`, "post", {
       data: null,
     });
-  }
-
-  async startStage(stageId) {
-    return this.makeRequest(`${this.baseURL}/startStage`, "post", {
-      data: {
-        stageId: stageId,
-      },
-    });
-  }
-
-  async endStage(payload) {
-    return this.makeRequest(`${this.baseURL}/endStage`, "post", payload);
   }
 
   async getValidToken(isNew = false) {
@@ -336,22 +325,6 @@ class ClientAPI {
     }
   }
 
-  getStageWaitTime(stageId) {
-    const stage = parseInt(stageId);
-    const MAX_PLAY_TIME = 2280;
-
-    if (stage === 1) return Math.min(Math.floor(Math.random() * 30 + 150), MAX_PLAY_TIME);
-    else if (stage === 2) return Math.min(Math.floor(Math.random() * 30 + 170), MAX_PLAY_TIME);
-    else if (stage === 3) return Math.min(Math.floor(Math.random() * 30 + 190), MAX_PLAY_TIME);
-    else if (stage === 4) return Math.min(Math.floor(Math.random() * 30 + 250), MAX_PLAY_TIME);
-    else if (stage === 5) return Math.min(Math.floor(Math.random() * 30 + 300), MAX_PLAY_TIME);
-    else if (stage <= 50) {
-      const baseTime = 300 + (stage - 5) * 60;
-      return Math.min(Math.floor(Math.random() * 60 + baseTime), MAX_PLAY_TIME);
-    }
-    return 60;
-  }
-
   canClaimSparkCore(lastClaim) {
     const currentTime = Date.now();
     const timeDiff = currentTime - lastClaim;
@@ -363,7 +336,7 @@ class ClientAPI {
   getRemainingTimeForSparkCore(lastClaim) {
     const currentTime = Date.now();
     const timeDiff = currentTime - lastClaim;
-    const hours24 = 24 * 60 * 60 * 1000;
+    const hours24 = settings.TIME_CLAIM_SPARK * 60 * 60 * 1000;
     const remainingTime = hours24 - timeDiff;
     if (remainingTime <= 0) {
       return { hours: 0, minutes: 0 };
@@ -373,113 +346,83 @@ class ClientAPI {
     return { hours: remainingHours, minutes: remainingMinutes };
   }
 
-  async handleGame(stageLevel, retries = 2) {
-    let played = false;
-    while (retries > 0) {
-      retries--;
-      const res = await this.startStage(String(stageLevel));
-      if (!res.success) {
-        this.log(`Can't start stage ${stageLevel} | ${JSON.stringify(res)}`, "warning");
-        if (settings.AUTO_LOOP) return false;
-        continue;
-      }
-      const { stageUid, stageId, lootItemInfo, userState } = res.data;
-      if (!stageUid || !lootItemInfo) {
-        this.log(`Can't start stage`, "warning");
-        if (settings.AUTO_LOOP) return false;
-        continue;
-      }
+  async handleClaimReward() {
+    const rewardSv = new SparkSv({
+      log: (type, mess) => this.log(type, mess),
+      makeRequest: (url, method, data, options) => this.makeRequest(url, method, data, options),
+    });
+    await rewardSv.handleClaimSparkLink();
+  }
 
-      const waitTimeInSeconds = this.getStageWaitTime(stageId);
-      const playTime = waitTimeInSeconds * 1000;
-      if (playTime < 60000 || playTime > 2280 * 1000) {
-        this.log(`Invalid playTime for Stage ${stageId}: ${playTime}ms (${waitTimeInSeconds}s)`, "warning");
-        continue;
+  async handleGame(userData) {
+    let { stages, sparkLink, sparkCore, userInfo, currency } = userData;
+    let energy = currency.energyInfo.energy;
+    let currentStage = stages.stageLv;
+    const gameSv = new GameSv({
+      log: (type, mess) => this.log(type, mess),
+      makeRequest: (url, method, data, options) => this.makeRequest(url, method, data, options),
+    });
+
+    //loop one stage
+    if (settings.AUTO_LOOP && currentStage >= settings.LOOP_STAGE) {
+      this.log(`You are looping stage ${settings.LOOP_STAGE}...`);
+      while (energy > 5) {
+        energy -= 5;
+        const res = await gameSv.handlePlayGame(settings.LOOP_STAGE);
+        if (!res) break;
       }
-      const secondWait = Math.floor(waitTimeInSeconds);
-      const { minutes, seconds } = this.convertMilliseconds(playTime);
-      this.log(`[${new Date().toLocaleString()}] Waiting ${minutes} minutes ${seconds} seconds to complete game at stage ${stageLevel}...`);
-      await sleep(secondWait);
-
-      const baseKillCount = Math.floor(playTime / 200);
-      let killCount;
-
-      if (stageId <= 20) {
-        const referenceKillCounts = {
-          1: 819,
-          2: 889,
-          3: 1126,
-          4: 1402,
-          5: 1622,
-          6: 2081,
-          7: 2120,
-          8: 2639,
-          9: 3076,
-          10: 3225,
-          11: 3627,
-          12: 3699,
-          13: 4265,
-          14: 4357,
-          15: 4708,
-          16: 4908,
-          17: 5209,
-          18: 5544,
-          19: 6014,
-          20: 6240,
-        };
-        killCount = Math.min(Math.floor(baseKillCount + (referenceKillCounts[stageId] || baseKillCount) * (0.8 + Math.random() * 0.4)), referenceKillCounts[stageId] || baseKillCount * 1.5);
+    } else if (currentStage >= settings.MAX_STAGE) {
+      //ktra các stage chưa claim
+      const stageAvaliable = Object.values(stages.infos).filter((s) => s.rewardState < 3);
+      if (stageAvaliable.length == 0) {
+        return this.log(`You claimed reward all stage!`, "custom");
       } else {
-        const baseStage20KillCount = 6240;
-        const incrementPerStage = (baseStage20KillCount - 819) / 19;
-        killCount = Math.min(Math.floor(baseKillCount + (baseStage20KillCount + (stageId - 20) * incrementPerStage) * (0.8 + Math.random() * 0.4)), baseKillCount * 1.5);
-      }
+        for (const stage of stageAvaliable) {
+          if (energy > 5) {
+            energy -= 5;
+            const res = await gameSv.handlePlayGame(stage.stageId);
 
-      const lootedItemInfo = {
-        lootedItems: lootItemInfo.lootItems,
-        gold: lootItemInfo.gold,
-      };
-
-      const payloadEnd = {
-        data: {
-          stageUid: stageUid,
-          lootedItemInfo: lootedItemInfo,
-          stageState: 3,
-          playTime: playTime,
-          killCount: killCount,
-          abilityGold: 0,
-        },
-      };
-
-      if (!played) {
-        const resEnd = await this.endStage(payloadEnd);
-        if (!resEnd.success) {
-          this.log(`Can't end stage ${stageLevel} | ${JSON.stringify(resEnd)}`, "warning");
-          return false;
+            if (!res) break;
+          } else {
+            this.log(`Not enough energy!`, "warning");
+          }
         }
-        const { rewardInfo } = resEnd.data;
-        this.log(`End stage ${stageLevel} success`, "success");
-        played = true;
       }
-
-      if (!settings.AUTO_LOOP) {
-        const resClaim = await this.claimStageReward(stageLevel);
-        if (resClaim.success) {
-          this.log(`Claim stage ${stageLevel} success`, "success");
-          return true;
+    } else {
+      //main play game
+      while (currentStage < settings.MAX_STAGE && energy > 5) {
+        //retries when level stage high =>anti detact bot
+        let retries = 0;
+        if (currentStage > 40) {
+          retries = getRandomNumber(5, 10);
+          this.log(`Stage ${currentStage} play count: ${retries}`, "info");
+        } else if (currentStage > 30) {
+          retries = getRandomNumber(3, 8);
+          this.log(`Stage ${currentStage} play count: ${retries}`, "info");
+        } else if (currentStage > 20) {
+          retries = getRandomNumber(2, 6);
+          this.log(`Stage ${currentStage} play count: ${retries}`, "info");
+        } else if (currentStage > 10) {
+          retries = getRandomNumber(1, 5);
+          this.log(`Stage ${currentStage} play count: ${retries}`, "info");
         } else {
-          this.log(`Claim stage ${stageLevel} failed | Reward: ${JSON.stringify(resClaim)}`, "warning");
-          return true;
+          retries = getRandomNumber(1, 2);
+          this.log(`Stage ${currentStage} play count: ${retries}`, "info");
+        }
+
+        while (retries > 0) {
+          retries--;
+          if (energy > 5) {
+            energy -= 5;
+            const res = await gameSv.handlePlayGame(currentStage);
+            currentStage++;
+            if (!res) return;
+          } else {
+            this.log(`Not enough energy!`, "warning");
+          }
         }
       }
     }
-
-    return settings.AUTO_LOOP ?? false;
-  }
-
-  convertMilliseconds(ms) {
-    const minutes = Math.floor(ms / 60000);
-    const seconds = Math.floor((ms % 60000) / 1000);
-    return { minutes, seconds };
   }
 
   async runAccount() {
@@ -488,6 +431,7 @@ class ClientAPI {
     const queryData = JSON.parse(decodeURIComponent(initData.split("user=")[1].split("&")[0]));
     this.session_name = queryData.id;
     this.token = this.tokens[this.session_name];
+    this.#set_headers();
 
     if (settings.USE_PROXY) {
       try {
@@ -515,12 +459,10 @@ class ClientAPI {
     // process.exit(0);
     if (userData.success) {
       let { stages, sparkLink, sparkCore, userInfo, currency } = userData.data;
-      let energy = currency.energyInfo.energy;
-      let currentStage = stages.stageLv;
       const lastClaim = sparkCore.lastClaim;
 
       this.log(
-        `Username: ${userInfo.name} | Lv stage: ${stages.stageLv} | Gold: ${currency.gold} | Diamond: ${currency.diamond} | Spark:${currency.sparks} | Energy: ${currency.energyInfo.energy}`,
+        `Username (ref_code): ${userInfo.name} | Level: ${userInfo.userLv} | Lv stage: ${stages.stageLv} | Gold: ${currency.gold} | Diamond: ${currency.diamond} | Spark:${currency.sparks} | Energy: ${currency.energyInfo.energy}`,
         "custom"
       );
       if (!lastClaim || this.canClaimSparkCore(lastClaim)) {
@@ -536,51 +478,10 @@ class ClientAPI {
       }
       await sleep(1);
 
-      if (settings.AUTO_LOOP && currentStage >= settings.LOOP_STAGE) {
-        this.log(`You are looping stage ${settings.LOOP_STAGE}...`);
-        while (energy > 5) {
-          energy -= 5;
-          const res = await this.handleGame(settings.LOOP_STAGE);
-          if (!res) break;
-          this.token = await this.getValidToken();
-        }
-      }
+      await this.handleClaimReward();
+      await sleep(1);
 
-      if (currentStage >= settings.MAX_STAGE) {
-        //ktra các stage chưa claim
-        const stageAvaliable = Object.values(stages.infos).filter((s) => s.rewardState < 3);
-        if (stageAvaliable.length == 0) {
-          while (energy > 5) {
-            energy -= 5;
-            const res = await this.handleGame(settings.MAX_STAGE);
-            if (!res) break;
-            this.token = await this.getValidToken();
-          }
-        } else {
-          for (const stage of stageAvaliable) {
-            if (energy > 5) {
-              energy -= 5;
-              const res = await this.handleGame(stage.stageId);
-              this.token = await this.getValidToken();
-              if (!res) break;
-            } else {
-              this.log(`Not enough energy!`, "warning");
-            }
-          }
-        }
-      }
-      while (currentStage < settings.MAX_STAGE && energy > 5) {
-        if (energy > 5) {
-          energy -= 5;
-          const res = await this.handleGame(currentStage);
-          this.token = await this.getValidToken();
-          currentStage++;
-          if (!res) break;
-        } else {
-          this.log(`Not enough energy!`, "warning");
-        }
-      }
-      await sleep(2);
+      await this.handleGame(userData.data);
     } else {
       return this.log("Can't get use info...skipping", "error");
     }

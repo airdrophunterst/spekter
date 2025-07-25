@@ -2,7 +2,7 @@
 
 Tool được phát triển bởi nhóm tele Airdrop Hunter Siêu Tốc (https://t.me/airdrophuntersieutoc)
 
-Link: [https://t.me/spekteragency_bot/spektapp](https://t.me/spekteragency_bot/spektapp?startapp=Agent_179391)
+Link: [https://t.me/spekteragency_bot/spektapp](https://t.me/spekteragency_bot/spektapp?startapp=Agent_599117)
 
 ## 🚨 Attention Before Running Cli Version
 
@@ -12,8 +12,9 @@ I am not `responsible` for the possibility of an account being `banned`!
 
 - Auto ref
 - Auto claim spark
+- Auto claim reward ref
 - Auto game full stage
-- Auto login, revalidate
+- Auto randon amount play each stage
 - Support proxy or not
 - Mutiple threads, multiple accounts
 
