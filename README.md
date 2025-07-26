@@ -2,6 +2,8 @@
 
 Tool được phát triển bởi nhóm tele Airdrop Hunter Siêu Tốc (https://t.me/airdrophuntersieutoc)
 
+Phiên bản đầy đủ: https://amautomarket.com/products/spekter-agency-full-chuc-nang
+
 Link: [https://t.me/spekteragency_bot/spektapp](https://t.me/spekteragency_bot/spektapp?startapp=Agent_599117)
 
 ## 🚨 Attention Before Running Cli Version
