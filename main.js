@@ -328,7 +328,7 @@ class ClientAPI {
   canClaimSparkCore(lastClaim) {
     const currentTime = Date.now();
     const timeDiff = currentTime - lastClaim;
-    const hours24 = 24 * 60 * 60 * 1000;
+    const hours24 = settings.TIME_CLAIM_SPARK * 60 * 60 * 1000;
 
     return timeDiff >= hours24;
   }
