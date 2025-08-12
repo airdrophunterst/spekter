@@ -25,7 +25,7 @@ const settings = {
   ENABLE_MAP_INDEX_CHALLENGE: process.env.ENABLE_MAP_INDEX_CHALLENGE ? process.env.ENABLE_MAP_INDEX_CHALLENGE.toLowerCase() === "true" : false,
 
   AUTO_SHOW_COUNT_DOWN_TIME_SLEEP: process.env.AUTO_SHOW_COUNT_DOWN_TIME_SLEEP ? process.env.AUTO_SHOW_COUNT_DOWN_TIME_SLEEP.toLowerCase() === "true" : false,
-  AUTO_CLAIM_BONUS: process.env.AUTO_CLAIM_BONUS ? process.env.AUTO_CLAIM_BONUS.toLowerCase() === "true" : false,
+  AUTO_CLAIM_REF: process.env.AUTO_CLAIM_REF ? process.env.AUTO_CLAIM_REF.toLowerCase() === "true" : false,
   ENABLE_ADVANCED_MERGE: process.env.ENABLE_ADVANCED_MERGE ? process.env.ENABLE_ADVANCED_MERGE.toLowerCase() === "true" : false,
   ENABLE_DEBUG: process.env.ENABLE_DEBUG ? process.env.ENABLE_DEBUG.toLowerCase() === "true" : false,
 

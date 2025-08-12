@@ -14,21 +14,21 @@ const SparkSv = require("./services/sparklink");
 
 class ClientAPI {
   constructor(queryId, accountIndex, proxy, baseURL, tokens) {
-    this.headers = new Headers({
+    this.headers = {
       Accept: "*/*",
       "Accept-Encoding": "gzip, deflate, br",
       "Accept-Language": "vi-VN,vi;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5",
       "Content-Type": "application/json",
-      origin: "https://app.spekteragency.io",
-      referer: "https://app.spekteragency.io/",
+      Origin: "https://app.spekteragency.io",
+      Referer: "https://app.spekteragency.io/",
       "Sec-Ch-Ua": '"Not/A)Brand";v="99", "Google Chrome";v="115", "Chromium";v="115"',
       "Sec-Ch-Ua-Mobile": "?0",
       "Sec-Ch-Ua-Platform": '"Windows"',
       "Sec-Fetch-Dest": "empty",
       "Sec-Fetch-Mode": "cors",
-      "Sec-Fetch-Site": "same-origin",
+      "Sec-Fetch-Site": "same-site",
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-    });
+    };
     this.baseURL = baseURL;
     this.queryId = queryId;
     this.accountIndex = accountIndex;
@@ -88,7 +88,7 @@ class ClientAPI {
       }
     }
 
-    return "Unknown";
+    return "android";
   }
 
   #set_headers() {
@@ -228,10 +228,11 @@ class ClientAPI {
       }
       currRetries++;
     } while (currRetries <= retries && !success);
+    return { success: false, status: 500, error: "err 500" };
   }
 
   async auth() {
-    return this.makeRequest(
+    return await this.makeRequest(
       `${this.baseURL}/telegramAuth`,
       "post",
       {
@@ -288,12 +289,6 @@ class ClientAPI {
   async getUserInfo() {
     return this.makeRequest(`${this.baseURL}/getUserData`, "post", {
       inviter: settings.REF_ID || "Agent_179391",
-    });
-  }
-
-  async claimStageReward(stageId) {
-    return this.makeRequest(`${this.baseURL}/claimStageReward`, "post", {
-      stageId: stageId,
     });
   }
 
@@ -354,9 +349,23 @@ class ClientAPI {
     await rewardSv.handleClaimSparkLink();
   }
 
+  calculateEnergy(info) {
+    const { energy, changedEnergyTime } = info;
+    const currentTime = Date.now();
+    const timeElapsed = currentTime - changedEnergyTime;
+
+    const energyPerCycle = 1;
+    const cycleTime = 12 * 60 * 1000; // 12 phút tính bằng mili giây
+
+    const cyclesElapsed = Math.floor(timeElapsed / cycleTime);
+    const totalEnergy = Math.min(cyclesElapsed * energyPerCycle, 30);
+    return energy > 5 ? +energy : +totalEnergy;
+  }
+
   async handleGame(userData) {
     let { stages, sparkLink, sparkCore, userInfo, currency } = userData;
-    let energy = currency.energyInfo.energy;
+    // let energy = currency.energyInfo.energy;
+    let energy = this.calculateEnergy(currency.energyInfo);
     let currentStage = stages.stageLv;
     const gameSv = new GameSv({
       log: (type, mess) => this.log(type, mess),
@@ -478,8 +487,10 @@ class ClientAPI {
       }
       await sleep(1);
 
-      await this.handleClaimReward();
-      await sleep(1);
+      if (settings.AUTO_CLAIM_REF) {
+        await this.handleClaimReward();
+        await sleep(1);
+      }
 
       await this.handleGame(userData.data);
     } else {
@@ -525,7 +536,6 @@ async function main() {
   const { endpoint: hasIDAPI, message } = await checkBaseUrl();
   if (!hasIDAPI) return console.log(`Không thể tìm thấy ID API, thử lại sau!`.red);
   console.log(`${message}`.yellow);
-  // process.exit();
   queryIds.map((val, i) => new ClientAPI(val, i, proxies[i], hasIDAPI, tokens).createUserAgent());
 
   await sleep(1);
