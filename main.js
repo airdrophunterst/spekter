@@ -19,14 +19,14 @@ class ClientAPI {
       "Accept-Encoding": "gzip, deflate, br",
       "Accept-Language": "vi-VN,vi;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5",
       "Content-Type": "application/json",
-      Origin: "https://app.spekteragency.io",
-      Referer: "https://app.spekteragency.io/",
+      origin: "https://app.spekteragency.io",
+      referer: "https://app.spekteragency.io/",
       "Sec-Ch-Ua": '"Not/A)Brand";v="99", "Google Chrome";v="115", "Chromium";v="115"',
       "Sec-Ch-Ua-Mobile": "?0",
       "Sec-Ch-Ua-Platform": '"Windows"',
       "Sec-Fetch-Dest": "empty",
       "Sec-Fetch-Mode": "cors",
-      "Sec-Fetch-Site": "same-site",
+      "Sec-Fetch-Site": "same-origin",
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
     };
     this.baseURL = baseURL;
@@ -88,7 +88,7 @@ class ClientAPI {
       }
     }
 
-    return "android";
+    return "Unknown";
   }
 
   #set_headers() {
@@ -228,11 +228,10 @@ class ClientAPI {
       }
       currRetries++;
     } while (currRetries <= retries && !success);
-    return { success: false, status: 500, error: "err 500" };
   }
 
   async auth() {
-    return await this.makeRequest(
+    return this.makeRequest(
       `${this.baseURL}/telegramAuth`,
       "post",
       {
@@ -536,6 +535,7 @@ async function main() {
   const { endpoint: hasIDAPI, message } = await checkBaseUrl();
   if (!hasIDAPI) return console.log(`Không thể tìm thấy ID API, thử lại sau!`.red);
   console.log(`${message}`.yellow);
+  // process.exit();
   queryIds.map((val, i) => new ClientAPI(val, i, proxies[i], hasIDAPI, tokens).createUserAgent());
 
   await sleep(1);

@@ -30,6 +30,12 @@ class GameSv {
     return this.makeRequest(`${settings.BASE_URL}/endStage`, "post", payload);
   }
 
+  async claimStageReward(stageId) {
+    return this.makeRequest(`${settings.BASE_URL}/claimStageReward`, "post", {
+      stageId: stageId,
+    });
+  }
+
   convertMilliseconds(ms) {
     const minutes = Math.floor(ms / 60000);
     const seconds = Math.floor((ms % 60000) / 1000);
