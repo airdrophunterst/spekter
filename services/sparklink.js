@@ -2,8 +2,8 @@ const settings = require("../config/config");
 const { sleep } = require("../utils");
 
 class SparkSv {
-  constructor({ makeRequest, log }) {
-    this.userData = null;
+  constructor({ makeRequest, log, userData }) {
+    this.userData = userData;
     this.makeRequest = makeRequest;
     this.log = log;
   }
@@ -20,8 +20,9 @@ class SparkSv {
 
   async handleRefreshUserData() {
     const resUser = await this.#getUserData();
-    if (!resUser.success) throw new Error(`Can't get user data`);
-    return resUser.data;
+    if (!resUser.success) return this.userData;
+    this.userData = resUser.data?.userData;
+    return resUser.data?.userData;
   }
 
   async handleClaimSparkLink() {
@@ -37,16 +38,11 @@ class SparkSv {
       }
     });
     if (!linksAvaliable || linksAvaliable.length === 0) return this.log(`No reward ref avaliable to claim`, "warning");
-    for (const ref of linksAvaliable) {
-      await sleep(3);
-      const resClaim = await this.makeRequest(`${settings.BASE_URL}/claimSparkLinkStageQuest`, "post", {
-        inviteeUid: ref.uid,
-      });
-      if (!resClaim.success) {
-        this.log(`Claimed ref ${ref.uid} falied | ${JSON.stringify(resClaim)}`, "warning");
-      } else {
-        this.log(`Claimed ref ${ref.uid}`, "success");
-      }
+    const resClaim = await this.makeRequest(`${settings.BASE_URL}/claimAllSparkLinkStageQuest`, "post", {});
+    if (!resClaim.success) {
+      this.log(`Claimed ref ${ref.uid} falied | ${JSON.stringify(resClaim)}`, "warning");
+    } else {
+      this.log(`Claimed ref ${ref.uid}`, "success");
     }
   }
 }

@@ -6,12 +6,16 @@ const { HttpsProxyAgent } = require("https-proxy-agent");
 const readline = require("readline");
 const user_agents = require("./config/userAgents");
 const settings = require("./config/config");
-const { sleep, loadData, getRandomNumber, saveToken, isTokenExpired, saveJson } = require("./utils");
+const { sleep, loadData, getRandomNumber, saveToken, isTokenExpired, saveJson, getRandomElement } = require("./utils");
 const { Worker, isMainThread, parentPort, workerData } = require("worker_threads");
 const { checkBaseUrl } = require("./checkAPI");
+const EquipmentSv = require("./services/equiment");
 const GameSv = require("./services/game");
+const BuySv = require("./services/buy");
 const SparkSv = require("./services/sparklink");
-
+const SweepSv = require("./services/sweep");
+const TasksSv = require("./services/tasks");
+const refcodes = loadData("refcodes.txt");
 class ClientAPI {
   constructor(queryId, accountIndex, proxy, baseURL, tokens) {
     this.headers = {
@@ -38,6 +42,9 @@ class ClientAPI {
     this.session_user_agents = this.#load_session_data();
     this.tokens = tokens;
     this.token = null;
+    this.refreshToken = null;
+    this.userData = null;
+    this.localItem = null;
   }
 
   #load_session_data() {
@@ -88,7 +95,7 @@ class ClientAPI {
       }
     }
 
-    return "Unknown";
+    return "Windows";
   }
 
   #set_headers() {
@@ -111,7 +118,7 @@ class ClientAPI {
   }
 
   async log(msg, type = "info") {
-    const accountPrefix = `[Tài khoản ${this.accountIndex + 1}]`;
+    const accountPrefix = `[SPEKTER][${this.accountIndex + 1}]`;
     let ipPrefix = this.proxyIP ? `[${this.proxyIP}]` : "[Local IP]";
     let logMessage = "";
     if (settings.USE_PROXY) {
@@ -198,16 +205,18 @@ class ClientAPI {
         });
         success = true;
         if (response?.data) {
-          if (response?.data?.errorCode) {
-            if (response?.data?.errorCode !== 0) return { status: response.status, success: false, data: response.data };
-            return { status: response.status, success: true, data: response.data.data };
-          }
           return { status: response.status, success: true, data: response.data?.data || response.data };
         }
         return { success: true, data: response.data, status: response.status };
       } catch (error) {
         if (error.status == 401) {
-          const token = await this.getValidToken(true);
+          let token = null;
+          if (this.refreshToken && url !== "https://securetoken.googleapis.com/v1/token?key=AIzaSyAvfTd0fcRoSBwPw22kcBM2JqvG7Y147DY") {
+            token = await this.getValidToken(false, true);
+          } else {
+            token = await this.getValidToken(true);
+          }
+
           if (!token) {
             process.exit(0);
           }
@@ -268,6 +277,26 @@ class ClientAPI {
     return res;
   }
 
+  async refreshTokenAPI() {
+    const res = await this.makeRequest(
+      `https://securetoken.googleapis.com/v1/token?key=AIzaSyAvfTd0fcRoSBwPw22kcBM2JqvG7Y147DY`,
+      "post",
+      {
+        grant_type: "refresh_token",
+        refresh_token: this.refreshToken,
+      },
+      {
+        isAuth: true,
+        extraHeaders: {
+          host: "securetoken.googleapis.com",
+          "x-client-version": "Chrome/JsCore/8.10.1/FirebaseCore-web",
+          "x-firebase-gmpid": "1:304933993727:web:e5034340654db68bd7e0ca",
+        },
+      }
+    );
+    return res;
+  }
+
   async getAccinfo(token) {
     return this.makeRequest(
       `https://www.googleapis.com/identitytoolkit/v3/relyingparty/getAccountInfo?key=AIzaSyAvfTd0fcRoSBwPw22kcBM2JqvG7Y147DY`,
@@ -287,7 +316,7 @@ class ClientAPI {
 
   async getUserInfo() {
     return this.makeRequest(`${this.baseURL}/getUserData`, "post", {
-      inviter: settings.REF_ID || "Agent_179391",
+      inviter: getRandomElement(refcodes) || settings.REF_ID || "Agent_179391",
     });
   }
 
@@ -297,20 +326,33 @@ class ClientAPI {
     });
   }
 
-  async getValidToken(isNew = false) {
+  async getValidToken(isNew = false, isRe = false) {
     const existingToken = this.token;
     const isExp = isTokenExpired(existingToken);
+
     if (existingToken && !isNew && !isExp) {
       this.log("Using valid token", "success");
       return existingToken;
     } else {
+      if (!isNew && isRe && this.refreshToken) {
+        this.log(`Refreshing token...`);
+        const newToken = await this.refreshTokenAPI();
+        if (newToken.data.id_token) {
+          this.token = newToken.data.id_token;
+          this.refreshToken = newToken.data.refresh_token;
+          await saveJson(this.session_name, JSON.stringify(newToken.data), "tokens.json");
+          return newToken.data.id_token;
+        }
+      }
+
       this.log("No found token or experied, trying get new token...", "warning");
       const newToken = await this.auth();
       if (newToken.success && newToken.data?.token) {
         const res = await this.verifyToken(newToken.data?.token);
         if (res.data.idToken) {
           this.token = res.data.idToken;
-          await saveJson(this.session_name, res.data.idToken, "tokens.json");
+          this.refreshToken = res.data.refreshToken;
+          await saveJson(this.session_name, JSON.stringify(res.data), "tokens.json");
           return res.data.idToken;
         }
       }
@@ -340,12 +382,43 @@ class ClientAPI {
     return { hours: remainingHours, minutes: remainingMinutes };
   }
 
+  async handleEquipment() {
+    this.log(`Checking equipment...`);
+
+    const equipSv = new EquipmentSv({
+      log: (type, mess) => this.log(type, mess),
+      makeRequest: (url, method, data, options) => this.makeRequest(url, method, data, options),
+      userData: this.userData,
+    });
+
+    await equipSv.handleOptimizeEquipment();
+  }
+
   async handleClaimReward() {
+    this.log(`Checking ref...`);
+
     const rewardSv = new SparkSv({
       log: (type, mess) => this.log(type, mess),
       makeRequest: (url, method, data, options) => this.makeRequest(url, method, data, options),
+      userData: this.userData,
     });
     await rewardSv.handleClaimSparkLink();
+  }
+
+  async handleBuyShop() {
+    this.log(`Checking shop...`);
+
+    const shopSv = new BuySv({
+      log: (type, mess) => this.log(type, mess),
+      makeRequest: (url, method, data, options) => this.makeRequest(url, method, data, options),
+      userData: this.userData,
+    });
+
+    await shopSv.handleOpenRune();
+    await sleep(1);
+    await shopSv.handleOpenChess();
+    await sleep(1);
+    await shopSv.handleBuyCard();
   }
 
   calculateEnergy(info) {
@@ -362,6 +435,8 @@ class ClientAPI {
   }
 
   async handleGame(userData) {
+    this.log(`Checking game...`);
+
     let { stages, sparkLink, sparkCore, userInfo, currency } = userData;
     // let energy = currency.energyInfo.energy;
     let energy = this.calculateEnergy(currency.energyInfo);
@@ -369,6 +444,7 @@ class ClientAPI {
     const gameSv = new GameSv({
       log: (type, mess) => this.log(type, mess),
       makeRequest: (url, method, data, options) => this.makeRequest(url, method, data, options),
+      userData: this.userData,
     });
 
     //loop one stage
@@ -433,12 +509,41 @@ class ClientAPI {
     }
   }
 
+  async handleSweep() {
+    this.log(`Checking sweep...`);
+    const swSv = new SweepSv({
+      log: (type, mess) => this.log(type, mess),
+      makeRequest: (url, method, data, options) => this.makeRequest(url, method, data, options),
+      userData: this.userData,
+    });
+    await sleep(1);
+    await swSv.handleSweep();
+  }
+
+  async handleTasks() {
+    this.log(`Checking task...`);
+
+    const taskSv = new TasksSv({
+      log: (type, mess) => this.log(type, mess),
+      makeRequest: (url, method, data, options) => this.makeRequest(url, method, data, options),
+      userData: this.userData,
+    });
+    await sleep(1);
+    await taskSv.handleTasks();
+  }
+
   async runAccount() {
     const accountIndex = this.accountIndex;
     const initData = this.queryId;
     const queryData = JSON.parse(decodeURIComponent(initData.split("user=")[1].split("&")[0]));
     this.session_name = queryData.id;
-    this.token = this.tokens[this.session_name];
+    try {
+      this.localItem = JSON.parse(this.tokens[this.session_name] ?? "{}");
+    } catch (error) {
+      this.localItem = JSON.parse(JSON.stringify(this.tokens[this.session_name]) ?? "{}");
+    }
+    this.token = this.localItem?.id_token ?? this.localItem?.idToken;
+    this.refreshToken = this.localItem?.refreshToken ?? this.localItem?.refresh_token;
     this.#set_headers();
 
     if (settings.USE_PROXY) {
@@ -466,8 +571,9 @@ class ClientAPI {
 
     // process.exit(0);
     if (userData.success) {
-      let { stages, sparkLink, sparkCore, userInfo, currency } = userData.data;
+      let { stages, sparkLink, sparkCore, userInfo, currency } = userData.data.userData;
       const lastClaim = sparkCore.lastClaim;
+      this.userData = userData.data.userData;
 
       this.log(
         `Username (ref_code): ${userInfo.name} | Level: ${userInfo.userLv} | Lv stage: ${stages.stageLv} | Gold: ${currency.gold} | Diamond: ${currency.diamond} | Spark:${currency.sparks} | Energy: ${currency.energyInfo.energy}`,
@@ -491,7 +597,41 @@ class ClientAPI {
         await sleep(1);
       }
 
-      await this.handleGame(userData.data);
+      try {
+        await this.handleSweep();
+        await sleep(1);
+      } catch (error) {
+        this.log(`Errr excute sweep: ${error.message}`, "warning");
+      }
+
+      try {
+        await this.handleTasks();
+        await sleep(1);
+      } catch (error) {
+        this.log(`Errr excute task: ${error.message}`, "warning");
+      }
+
+      try {
+        await this.handleBuyShop();
+        await sleep(1);
+      } catch (error) {
+        this.log(`Errr excute buy: ${error.message}`, "warning");
+      }
+
+      try {
+        await this.handleEquipment();
+        await sleep(1);
+      } catch (error) {
+        this.log(`Errr excute equip: ${error.message}`, "warning");
+      }
+
+      try {
+        if (settings.AUTO_PLAY_GAME) {
+          await this.handleGame(userData.data.userData);
+        }
+      } catch (error) {
+        this.log(`Errr excute game: ${error.message}`, "warning");
+      }
     } else {
       return this.log("Can't get use info...skipping", "error");
     }
