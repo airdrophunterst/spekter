@@ -10,16 +10,17 @@ const settings = {
   MAX_STAGE: process.env.MAX_STAGE ? parseInt(process.env.MAX_STAGE) : 51,
   LOOP_STAGE: process.env.LOOP_STAGE ? parseInt(process.env.LOOP_STAGE) : 51,
   TIME_CLAIM_SPARK: process.env.TIME_CLAIM_SPARK ? parseInt(process.env.TIME_CLAIM_SPARK) : 24,
+  NUMBER_PAID: process.env.NUMBER_PAID ? parseInt(process.env.NUMBER_PAID) : 1,
 
   START_MAP_CHALLENGE_INDEX: process.env.START_MAP_CHALLENGE_INDEX ? parseInt(process.env.START_MAP_CHALLENGE_INDEX) : 1,
 
   SKIP_TASKS: process.env.SKIP_TASKS ? JSON.parse(process.env.SKIP_TASKS.replace(/'/g, '"')) : [],
   TYPE_HERO_UPGRADE: process.env.TYPE_HERO_UPGRADE ? JSON.parse(process.env.TYPE_HERO_UPGRADE.replace(/'/g, '"')) : [],
-  TYPE_HERO_RESET: process.env.TYPE_HERO_RESET ? JSON.parse(process.env.TYPE_HERO_RESET.replace(/'/g, '"')) : [],
+  OPTIONS_PAID_DIAMOND: process.env.OPTIONS_PAID_DIAMOND ? JSON.parse(process.env.OPTIONS_PAID_DIAMOND.replace(/'/g, '"')) : [],
   CODE_GATEWAY: process.env.CODE_GATEWAY ? JSON.parse(process.env.CODE_GATEWAY.replace(/'/g, '"')) : [],
 
   AUTO_TASK: process.env.AUTO_TASK ? process.env.AUTO_TASK.toLowerCase() === "true" : false,
-  AUTO_CHALLENGE: process.env.AUTO_CHALLENGE ? process.env.AUTO_CHALLENGE.toLowerCase() === "true" : false,
+  AUTO_PLAY_GAME: process.env.AUTO_PLAY_GAME ? process.env.AUTO_PLAY_GAME.toLowerCase() === "true" : false,
   AUTO_LOOP: process.env.AUTO_LOOP ? process.env.AUTO_LOOP.toLowerCase() === "true" : false,
 
   ENABLE_MAP_INDEX_CHALLENGE: process.env.ENABLE_MAP_INDEX_CHALLENGE ? process.env.ENABLE_MAP_INDEX_CHALLENGE.toLowerCase() === "true" : false,

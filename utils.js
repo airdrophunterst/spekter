@@ -121,12 +121,10 @@ function loadData(file) {
   try {
     const datas = fs.readFileSync(file, "utf8").replace(/\r/g, "").split("\n").filter(Boolean);
     if (datas?.length <= 0) {
-      console.log(colors.red(`Không tìm thấy dữ liệu ${file}`));
       return [];
     }
     return datas;
   } catch (error) {
-    console.log(`Không tìm thấy file ${file}`.red);
     return [];
   }
 }
