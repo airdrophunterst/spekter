@@ -572,7 +572,8 @@ class ClientAPI {
     // process.exit(0);
     if (userData.success) {
       let { stages, sparkLink, sparkCore, userInfo, currency } = userData.data.userData;
-      const lastClaim = sparkCore.lastClaim;
+      const lastClaim = sparkCore?.lastClaim || null;
+
       this.userData = userData.data.userData;
 
       this.log(
